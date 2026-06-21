@@ -292,7 +292,7 @@
 
   function saveKey() {
     const val = document.getElementById("key-input").value.trim();
-    if (!val) { showError("Please paste your Google AI (Gemini) API key."); return; }
+    if (!val) { showError("Please paste your API key."); return; }
     localStorage.setItem(STORAGE_KEY, val);
     document.getElementById("key-status").textContent = "✅ API Key configured";
     document.getElementById("key-status").classList.add("ok");
@@ -305,7 +305,7 @@
   function forgetKey() {
     localStorage.removeItem(STORAGE_KEY);
     document.getElementById("key-input").value = "";
-    document.getElementById("key-status").textContent = "🔑 Google AI (Gemini) API Key required";
+    document.getElementById("key-status").textContent = "🔑 API Key required";
     document.getElementById("key-status").classList.remove("ok");
     document.getElementById("btn-forget").style.display = "none";
     openKeyPanel();
