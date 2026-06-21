@@ -179,7 +179,7 @@
   <!-- API Key Card -->
   <div class="card" id="key-card">
     <div class="key-header">
-      <span class="key-status" id="key-status">🔑 Anthropic API Key required</span>
+      <span class="key-status" id="key-status">🔑 Google AI (Gemini) API Key required</span>
       <div class="key-actions">
         <button class="btn-link danger" id="btn-forget" onclick="forgetKey()" style="display:none">Remove</button>
         <button class="btn-link" onclick="toggleKeyPanel()">▼ Change</button>
@@ -187,12 +187,12 @@
     </div>
     <div class="key-body" id="key-body">
       <p class="key-note">
-        Get your free key from
-        <a href="https://console.anthropic.com/keys" target="_blank" rel="noopener">console.anthropic.com/keys</a>.
-        Saved only in your browser's local storage — never sent anywhere except Anthropic.
+        Get a free key (no credit card needed) from
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+        Saved only in your browser's local storage — never sent anywhere except Google.
       </p>
       <div class="key-row">
-        <input type="password" id="key-input" placeholder="sk-ant-api03-…" />
+        <input type="password" id="key-input" placeholder="AIzaSy…" />
         <button class="btn-save" onclick="saveKey()">Save Key</button>
       </div>
     </div>
@@ -245,7 +245,7 @@
     <button class="btn-copy" id="btn-copy" onclick="copyResults()">📋 Copy Summary to Clipboard</button>
   </div>
 
-  <p class="footer">Powered by Claude · Your API key is stored locally in your browser only</p>
+  <p class="footer">Your API key is stored locally in your browser only</p>
 </div>
 
 <script>
@@ -261,12 +261,16 @@
   const SYSTEM = `You are an expert academic paper analyzer. Return ONLY a valid JSON object — no markdown, no explanation:
 {"methodology":"2-5 sentence description of the research approach.","limitations":"2-4 limitations each on its own line starting with • ","future_work":"2-4 future directions each on its own line starting with • . If none: Not specified.","year":"4-digit year or Not specified","accuracy":"All metrics and benchmark results, or Not reported","dataset":"All datasets used with sizes if mentioned, or Not specified"}`;
 
+  const GEMINI_MODEL = "gemini-2.5-flash";
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  const STORAGE_KEY = "paper_api_key_gemini";
+
   let pdfBase64 = null;
   let lastResults = null;
 
   /* ── Init ── */
   window.onload = () => {
-    const saved = localStorage.getItem("paper_api_key");
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       document.getElementById("key-status").textContent = "✅ API Key configured";
       document.getElementById("key-status").classList.add("ok");
@@ -293,8 +297,8 @@
 
   function saveKey() {
     const val = document.getElementById("key-input").value.trim();
-    if (!val) { showError("Please paste your Anthropic API key."); return; }
-    localStorage.setItem("paper_api_key", val);
+    if (!val) { showError("Please paste your Google AI (Gemini) API key."); return; }
+    localStorage.setItem(STORAGE_KEY, val);
     document.getElementById("key-status").textContent = "✅ API Key configured";
     document.getElementById("key-status").classList.add("ok");
     document.getElementById("btn-forget").style.display = "inline";
@@ -304,9 +308,9 @@
   }
 
   function forgetKey() {
-    localStorage.removeItem("paper_api_key");
+    localStorage.removeItem(STORAGE_KEY);
     document.getElementById("key-input").value = "";
-    document.getElementById("key-status").textContent = "🔑 Anthropic API Key required";
+    document.getElementById("key-status").textContent = "🔑 Google AI (Gemini) API Key required";
     document.getElementById("key-status").classList.remove("ok");
     document.getElementById("btn-forget").style.display = "none";
     openKeyPanel();
@@ -375,7 +379,7 @@
 
   /* ── Summarize ── */
   async function summarize() {
-    const key = localStorage.getItem("paper_api_key");
+    const key = localStorage.getItem(STORAGE_KEY);
     if (!key) { openKeyPanel(); showError("Enter your API key first."); return; }
 
     document.getElementById("spinner").style.display = "block";
@@ -384,32 +388,40 @@
     hideError();
 
     try {
-      let messages;
+      let parts;
       if (pdfBase64) {
-        messages = [{ role: "user", content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
-          { type: "text", text: "Analyze this research paper and return the JSON summary." }
-        ]}];
+        parts = [
+          { text: "Analyze this research paper and return the JSON summary." },
+          { inlineData: { mimeType: "application/pdf", data: pdfBase64 } }
+        ];
       } else {
         const txt = document.getElementById("paper-text").value.trim();
-        messages = [{ role: "user", content: "Analyze this research paper:\n\n" + txt }];
+        parts = [{ text: "Analyze this research paper:\n\n" + txt }];
       }
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch(GEMINI_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true"
+          "x-goog-api-key": key
         },
-        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1200, system: SYSTEM, messages })
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM }] },
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0.3 }
+        })
       });
 
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
 
-      const raw = data.content.map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
+      const candidate = data.candidates && data.candidates[0];
+      if (!candidate || !candidate.content) {
+        const reason = candidate ? candidate.finishReason : "unknown";
+        throw new Error("No response from Gemini (reason: " + reason + "). Try again.");
+      }
+
+      const raw = candidate.content.parts.map(p => p.text || "").join("").replace(/```json|```/g, "").trim();
       lastResults = JSON.parse(raw);
       renderResults(lastResults);
     } catch (err) {
