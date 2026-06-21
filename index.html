@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paper Summarizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #F0F4FF 0%, #F8F0FF 100%);
+      padding: 36px 16px 60px;
+      color: #374151;
+    }
+
+    #app { max-width: 800px; margin: 0 auto; }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 32px; }
+    .header .emoji { font-size: 48px; display: block; margin-bottom: 10px; }
+    .header h1 { font-size: 30px; font-weight: 900; color: #1A1B2E; letter-spacing: -0.6px; margin-bottom: 7px; }
+    .header p { color: #6B7280; font-size: 15px; }
+
+    /* Cards */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 16px rgba(59,91,219,0.08);
+      margin-bottom: 16px;
+      border: 1.5px solid #E5E7EB;
+    }
+    .card.active { border-color: #3B5BDB; }
+
+    /* API Key section */
+    .key-header { display: flex; justify-content: space-between; align-items: center; }
+    .key-status { font-weight: 700; font-size: 14px; color: #374151; }
+    .key-status.ok { color: #0CA678; }
+    .key-actions { display: flex; gap: 8px; }
+    .btn-link { background: none; border: none; font-size: 13px; font-weight: 600; cursor: pointer; color: #3B5BDB; padding: 2px 6px; }
+    .btn-link.danger { color: #E8590C; }
+    .key-body { margin-top: 14px; display: none; }
+    .key-body.open { display: block; }
+    .key-note { font-size: 13px; color: #6B7280; margin-bottom: 10px; line-height: 1.6; }
+    .key-note a { color: #3B5BDB; }
+    .key-row { display: flex; gap: 10px; }
+    .key-row input {
+      flex: 1; border: 1.5px solid #E5E7EB; border-radius: 8px;
+      padding: 10px 14px; font-size: 14px; font-family: monospace;
+      outline: none; color: #374151; background: #FAFAFA;
+      transition: border-color 0.15s;
+    }
+    .key-row input:focus { border-color: #3B5BDB; }
+
+    /* Input section */
+    .input-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .input-label { font-weight: 700; color: #1A1B2E; font-size: 15px; }
+    .btn-clear { background: none; border: none; color: #9CA3AF; cursor: pointer; font-size: 13px; display: none; }
+
+    textarea {
+      width: 100%; border: 1.5px solid #E5E7EB; border-radius: 10px;
+      padding: 14px 16px; font-size: 14px; line-height: 1.7;
+      color: #374151; resize: vertical; outline: none;
+      font-family: inherit; background: #FAFAFA;
+      transition: border-color 0.15s; min-height: 180px;
+    }
+    textarea:focus { border-color: #3B5BDB; }
+    textarea::placeholder { color: #B0B8C8; }
+
+    /* PDF zone */
+    #pdf-zone {
+      margin-top: 12px; border: 2px dashed #D1D5DB; border-radius: 10px;
+      padding: 16px; text-align: center; cursor: pointer;
+      background: #F9FAFB; color: #9CA3AF; font-size: 13px;
+      transition: all 0.15s;
+    }
+    #pdf-zone:hover, #pdf-zone.drag { border-color: #3B5BDB; background: #EEF2FF; color: #3B5BDB; }
+    #pdf-zone span.link { color: #3B5BDB; text-decoration: underline; }
+
+    #pdf-preview {
+      display: none; padding: 18px 20px; background: #F3F0FF;
+      border-radius: 10px; border: 1.5px solid #C4B5FD;
+      align-items: center; gap: 12px; margin-top: 0;
+    }
+    #pdf-preview .pdf-icon { font-size: 30px; }
+    #pdf-preview .pdf-name { font-weight: 600; color: #4C1D95; font-size: 14px; }
+    #pdf-preview .pdf-sub { font-size: 12px; color: #7C3AED; margin-top: 2px; }
+
+    /* Error */
+    .error-box {
+      margin-top: 12px; padding: 10px 14px;
+      background: #FFF1F0; border: 1px solid #FECACA;
+      border-radius: 8px; color: #C0280A; font-size: 13px; display: none;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      margin-top: 16px; width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #3B5BDB, #7048E8);
+      color: #fff; border: none; border-radius: 10px;
+      font-weight: 700; font-size: 15px; cursor: pointer;
+      transition: opacity 0.15s; letter-spacing: 0.2px;
+    }
+    .btn-primary:disabled { background: #E5E7EB; color: #9CA3AF; cursor: not-allowed; }
+
+    .btn-save {
+      background: #3B5BDB; color: #fff; border: none;
+      border-radius: 8px; padding: 10px 20px;
+      font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap;
+    }
+
+    .btn-copy {
+      margin-top: 20px; width: 100%; padding: 12px;
+      background: transparent; border: 1.5px solid #D1D5DB;
+      border-radius: 10px; font-weight: 600; font-size: 14px;
+      color: #6B7280; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-copy.done { color: #0CA678; border-color: #0CA678; }
+
+    /* Spinner */
+    #spinner { display: none; text-align: center; padding: 28px 0; color: #6B7280; font-size: 14px; }
+    .spin-ring {
+      display: inline-block; width: 38px; height: 38px;
+      border: 3px solid #E5E7EB; border-top-color: #3B5BDB;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      margin-bottom: 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Divider */
+    .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0 18px; }
+    .divider hr { flex: 1; border: none; border-top: 1px solid #E5E7EB; }
+    .divider span { font-weight: 700; color: #1A1B2E; font-size: 14px; white-space: nowrap; }
+
+    /* Results grid */
+    #results { display: none; }
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+
+    .result-card {
+      background: #fff; border-radius: 14px; padding: 20px 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .result-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.11); }
+
+    .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .card-icon {
+      width: 34px; height: 34px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    .card-label { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; }
+    .card-body { font-size: 14px; line-height: 1.75; color: #374151; }
+    .card-body p { margin: 0 0 4px; }
+
+    /* Footer */
+    .footer { text-align: center; margin-top: 48px; font-size: 12px; color: #C0C8D8; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.35s ease; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div class="header">
+    <span class="emoji">📄</span>
+    <h1>Paper Summarizer</h1>
+    <p>Extract key insights from any research paper — instantly.</p>
+  </div>
+
+  <!-- API Key Card -->
+  <div class="card" id="key-card">
+    <div class="key-header">
+      <span class="key-status" id="key-status">🔑 Anthropic API Key required</span>
+      <div class="key-actions">
+        <button class="btn-link danger" id="btn-forget" onclick="forgetKey()" style="display:none">Remove</button>
+        <button class="btn-link" onclick="toggleKeyPanel()">▼ Change</button>
+      </div>
+    </div>
+    <div class="key-body" id="key-body">
+      <p class="key-note">
+        Get your free key from
+        <a href="https://console.anthropic.com/keys" target="_blank" rel="noopener">console.anthropic.com/keys</a>.
+        Saved only in your browser's local storage — never sent anywhere except Anthropic.
+      </p>
+      <div class="key-row">
+        <input type="password" id="key-input" placeholder="sk-ant-api03-…" />
+        <button class="btn-save" onclick="saveKey()">Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card">
+    <div class="input-header">
+      <span class="input-label" id="input-label">Paste Paper Text</span>
+      <button class="btn-clear" id="btn-clear" onclick="clearAll()">✕ Clear all</button>
+    </div>
+
+    <div id="pdf-preview">
+      <span class="pdf-icon">📄</span>
+      <div>
+        <div class="pdf-name" id="pdf-name-text"></div>
+        <div class="pdf-sub">Ready to analyze</div>
+      </div>
+    </div>
+
+    <textarea id="paper-text" placeholder="Paste the full text of your research paper here…" rows="9"></textarea>
+
+    <div id="pdf-zone"
+      ondragover="event.preventDefault(); this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="handleDrop(event)"
+      onclick="document.getElementById('file-input').click()">
+      <span style="font-size:20px">📎</span>
+      Or <strong>drag &amp; drop a PDF</strong> here, or <span class="link">browse files</span>
+    </div>
+    <input type="file" id="file-input" accept="application/pdf" style="display:none" onchange="handleFileInput(event)" />
+
+    <div class="error-box" id="error-box"></div>
+
+    <button class="btn-primary" id="btn-summarize" onclick="summarize()" disabled>✨  Summarize Paper</button>
+  </div>
+
+  <!-- Spinner -->
+  <div id="spinner">
+    <div class="spin-ring"></div>
+    <p>Reading your paper and extracting insights…</p>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="divider">
+      <hr /><span>📊 Summary Results</span><hr />
+    </div>
+    <div class="results-grid" id="results-grid"></div>
+    <button class="btn-copy" id="btn-copy" onclick="copyResults()">📋 Copy Summary to Clipboard</button>
+  </div>
+
+  <p class="footer">Powered by Claude · Your API key is stored locally in your browser only</p>
+</div>
+
+<script>
+  const CATEGORIES = [
+    { key: "methodology",  label: "Methodology",        icon: "⚙️", color: "#3B5BDB", bg: "#EEF2FF" },
+    { key: "limitations",  label: "Limitations",        icon: "⚠️", color: "#E8590C", bg: "#FFF4EC" },
+    { key: "future_work",  label: "Future Work",        icon: "🔭", color: "#7048E8", bg: "#F3F0FF" },
+    { key: "year",         label: "Year",               icon: "📅", color: "#0CA678", bg: "#EDFBF3" },
+    { key: "accuracy",     label: "Accuracy / Results", icon: "🎯", color: "#C0860A", bg: "#FFF9E6" },
+    { key: "dataset",      label: "Dataset",            icon: "🗄️", color: "#1098AD", bg: "#E3FAFC" },
+  ];
+
+  const SYSTEM = `You are an expert academic paper analyzer. Return ONLY a valid JSON object — no markdown, no explanation:
+{"methodology":"2-5 sentence description of the research approach.","limitations":"2-4 limitations each on its own line starting with • ","future_work":"2-4 future directions each on its own line starting with • . If none: Not specified.","year":"4-digit year or Not specified","accuracy":"All metrics and benchmark results, or Not reported","dataset":"All datasets used with sizes if mentioned, or Not specified"}`;
+
+  let pdfBase64 = null;
+  let lastResults = null;
+
+  /* ── Init ── */
+  window.onload = () => {
+    const saved = localStorage.getItem("paper_api_key");
+    if (saved) {
+      document.getElementById("key-status").textContent = "✅ API Key configured";
+      document.getElementById("key-status").classList.add("ok");
+      document.getElementById("btn-forget").style.display = "inline";
+      document.getElementById("key-input").value = saved;
+    } else {
+      openKeyPanel();
+    }
+    document.getElementById("paper-text").addEventListener("input", onTextChange);
+  };
+
+  /* ── API Key ── */
+  function toggleKeyPanel() {
+    const body = document.getElementById("key-body");
+    const isOpen = body.classList.contains("open");
+    if (isOpen) { body.classList.remove("open"); }
+    else { openKeyPanel(); }
+  }
+
+  function openKeyPanel() {
+    document.getElementById("key-body").classList.add("open");
+    document.getElementById("key-card").classList.add("active");
+  }
+
+  function saveKey() {
+    const val = document.getElementById("key-input").value.trim();
+    if (!val) { showError("Please paste your Anthropic API key."); return; }
+    localStorage.setItem("paper_api_key", val);
+    document.getElementById("key-status").textContent = "✅ API Key configured";
+    document.getElementById("key-status").classList.add("ok");
+    document.getElementById("btn-forget").style.display = "inline";
+    document.getElementById("key-body").classList.remove("open");
+    document.getElementById("key-card").classList.remove("active");
+    hideError();
+  }
+
+  function forgetKey() {
+    localStorage.removeItem("paper_api_key");
+    document.getElementById("key-input").value = "";
+    document.getElementById("key-status").textContent = "🔑 Anthropic API Key required";
+    document.getElementById("key-status").classList.remove("ok");
+    document.getElementById("btn-forget").style.display = "none";
+    openKeyPanel();
+  }
+
+  /* ── Text input ── */
+  function onTextChange() {
+    const hasText = document.getElementById("paper-text").value.trim().length > 0;
+    updateSummarizeBtn();
+    document.getElementById("btn-clear").style.display = (hasText || pdfBase64) ? "inline" : "none";
+  }
+
+  /* ── File / PDF ── */
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById("pdf-zone").classList.remove("drag");
+    handleFile(e.dataTransfer.files[0]);
+  }
+
+  function handleFileInput(e) { handleFile(e.target.files[0]); }
+
+  function handleFile(file) {
+    if (!file) return;
+    if (file.type !== "application/pdf") { showError("Only PDF files are supported."); return; }
+    hideError();
+    const reader = new FileReader();
+    reader.onload = () => {
+      pdfBase64 = reader.result.split(",")[1];
+      document.getElementById("paper-text").style.display = "none";
+      document.getElementById("pdf-zone").style.display = "none";
+      const preview = document.getElementById("pdf-preview");
+      preview.style.display = "flex";
+      document.getElementById("pdf-name-text").textContent = file.name;
+      document.getElementById("input-label").textContent = "📎 PDF Uploaded";
+      document.getElementById("btn-clear").style.display = "inline";
+      updateSummarizeBtn();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearAll() {
+    pdfBase64 = null; lastResults = null;
+    document.getElementById("paper-text").value = "";
+    document.getElementById("paper-text").style.display = "block";
+    document.getElementById("pdf-zone").style.display = "block";
+    document.getElementById("pdf-preview").style.display = "none";
+    document.getElementById("input-label").textContent = "Paste Paper Text";
+    document.getElementById("btn-clear").style.display = "none";
+    document.getElementById("results").style.display = "none";
+    document.getElementById("file-input").value = "";
+    hideError(); updateSummarizeBtn();
+  }
+
+  function updateSummarizeBtn() {
+    const hasInput = pdfBase64 || document.getElementById("paper-text").value.trim().length > 0;
+    document.getElementById("btn-summarize").disabled = !hasInput;
+  }
+
+  /* ── Error ── */
+  function showError(msg) {
+    const el = document.getElementById("error-box");
+    el.textContent = "⚠️ " + msg;
+    el.style.display = "block";
+  }
+  function hideError() { document.getElementById("error-box").style.display = "none"; }
+
+  /* ── Summarize ── */
+  async function summarize() {
+    const key = localStorage.getItem("paper_api_key");
+    if (!key) { openKeyPanel(); showError("Enter your API key first."); return; }
+
+    document.getElementById("spinner").style.display = "block";
+    document.getElementById("results").style.display = "none";
+    document.getElementById("btn-summarize").disabled = true;
+    hideError();
+
+    try {
+      let messages;
+      if (pdfBase64) {
+        messages = [{ role: "user", content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+          { type: "text", text: "Analyze this research paper and return the JSON summary." }
+        ]}];
+      } else {
+        const txt = document.getElementById("paper-text").value.trim();
+        messages = [{ role: "user", content: "Analyze this research paper:\n\n" + txt }];
+      }
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1200, system: SYSTEM, messages })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const raw = data.content.map(b => b.text || "").join("").replace(/```json|```/g, "").trim();
+      lastResults = JSON.parse(raw);
+      renderResults(lastResults);
+    } catch (err) {
+      showError("Analysis failed: " + err.message);
+    } finally {
+      document.getElementById("spinner").style.display = "none";
+      document.getElementById("btn-summarize").disabled = false;
+      updateSummarizeBtn();
+    }
+  }
+
+  /* ── Render results ── */
+  function renderResults(data) {
+    const grid = document.getElementById("results-grid");
+    grid.innerHTML = "";
+
+    CATEGORIES.forEach(cat => {
+      const value = data[cat.key] || "Not found.";
+      const lines = value.split("\n").filter(Boolean).map(l => `<p>${l}</p>`).join("");
+
+      const card = document.createElement("div");
+      card.className = "result-card";
+      card.style.borderLeft = "4px solid " + cat.color;
+      card.innerHTML = `
+        <div class="card-head">
+          <div class="card-icon" style="background:${cat.bg}">${cat.icon}</div>
+          <span class="card-label" style="color:${cat.color}">${cat.label}</span>
+        </div>
+        <div class="card-body">${lines}</div>
+      `;
+      grid.appendChild(card);
+    });
+
+    const resultsEl = document.getElementById("results");
+    resultsEl.style.display = "block";
+    resultsEl.classList.add("fade-in");
+    document.getElementById("btn-copy").classList.remove("done");
+    document.getElementById("btn-copy").textContent = "📋 Copy Summary to Clipboard";
+    resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* ── Copy ── */
+  function copyResults() {
+    if (!lastResults) return;
+    const text = CATEGORIES.map(c => `${c.label.toUpperCase()}\n${lastResults[c.key]}`).join("\n\n");
+    navigator.clipboard.writeText(text);
+    const btn = document.getElementById("btn-copy");
+    btn.textContent = "✅ Copied to clipboard!";
+    btn.classList.add("done");
+    setTimeout(() => { btn.textContent = "📋 Copy Summary to Clipboard"; btn.classList.remove("done"); }, 2500);
+  }
+</script>
+</body>
+</html>
